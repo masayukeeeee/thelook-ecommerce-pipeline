@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: thelook_raw
+    meta:
+      external_location: "../../data-source/data/raw/{name}.csv"
+    tables:
+      - name: users
+      - name: orders
+      - name: order_items
+      - name: products
+      - name: events
+      - name: inventory_items
+      - name: distribution_centers

@@ -1,0 +1,6 @@
+thelook:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'thelook.duckdb'
