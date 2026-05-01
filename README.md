@@ -1,34 +1,24 @@
 # thelook-ecommerce-pipeline
 
-## Download the original dataset
+## 1. Download the original dataset
 
-```python
-import os
-import kagglehub
+Download csv files from kaggle datasets.
+All files will be put in `data-source/data/raw` directory.
 
-from pathlib import Path
 
-# Check or create output_dir
-OUTPUT_DIR_STR = "data/raw"
-os.makedirs(OUTPUT_DIR_STR)
-OUTPUT_DIR = Path(OUTPUT_DIR_STR)
+```sh
+cd data-source/setup
+uv sync --frozen
+source .venv/bin/activate
+python main.py
+```
 
-# Download latest version
-path = kagglehub.dataset_download(
-    "mustafakeser4/looker-ecommerce-bigquery-dataset",
-    output_dir = OUTPUT_DIR_STR
-)
+## 2. dbt initialization
 
-# Show csv files
-for i in f.glob("*.csv"):
-    print(i.name)
-
-# > products.csv
-# > orders.csv
-# > inventory_items.csv
-# > users.csv
-# > distribution_centers.csv
-# > events.csv
-# > order_items.csv
-
+```sh
+cd dbt
+uv sync --frozen
+source .venv/bin/activate
+dbt run --profiles-dir .
+dbt test --profiles-dir .
 ```
