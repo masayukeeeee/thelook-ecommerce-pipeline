@@ -1,0 +1,89 @@
+[sqlfluff]
+dialect = duckdb
+large_file_skip_byte_limit = 0
+processes = 0
+max_line_length = 100
+exclude_rules = AL07, AM03, AM04, CV04, CV11, RF02, RF03, ST01, ST02, ST07
+warnings = CV02, CV08, CV09, ST05
+
+[sqlfluff:indentation]
+tab_space_size = 2
+
+# テーブルのエイリアス宣言にはASをつける
+[sqlfluff:rules:aliasing.table]
+aliasing = explicit
+
+# カラムのエイリアス宣言にはASをつける
+[sqlfluff:rules:aliasing.column]
+aliasing = explicit
+
+# 変換したカラムにはエイリアスをつける
+[sqlfluff:rules:aliasing.expression]
+allow_scalar = False
+
+# エイリアスに利用する名前の文字数を3文字以上にする
+[sqlfluff:rules:aliasing.length]
+min_alias_length = 3
+
+# group by, order byのカラムの指定はクエリ内で一貫させる
+[sqlfluff:rules:ambiguous.column_references]
+group_by_and_order_by_style = consistent
+
+# キーワードのキャピタル化は一貫させる
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = consistent
+
+# 識別子のキャピタル化は一貫させる
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = consistent
+
+# 関数名のキャピタル化は一貫させる
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = consistent
+ignore_words_regex = ^IS_DSR\d?$
+
+# データタイプ宣言のキャピタル化は一貫させる
+[sqlfluff:rules:capitalisation.types]
+extended_capitalisation_policy = consistent
+
+# select句内最後のカンマは禁止
+[sqlfluff:rules:convention.select_trailing_comma]
+select_clause_trailing_comma = forbid
+
+# 最後のセミコロンは改行する
+[sqlfluff:rules:convention.terminator]
+multiline_newline = True
+
+# 利用非推奨のテーブルなど
+[sqlfluff:rules:convention.blocked_words]
+blocked_words = M_AD_NIKKEI_ID
+
+# シングル・ダブルクォートの混在は禁止
+[sqlfluff:rules:convention.quoted_literals]
+preferred_quoted_literal_style = consistent
+
+# 比較演算子は行頭に
+[sqlfluff:layout:type:comparison_operator]
+line_position = leading
+
+# 二項演算子は行頭に
+[sqlfluff:layout:type:binary_operator]
+line_position = leading
+
+# カンマは行末に
+[sqlfluff:layout:type:comma]
+line_position = trailing
+
+# コメント行の長さはチェックしない
+[sqlfluff:rules:layout.long_lines]
+ignore_comment_clauses = True
+ignore_comment_lines = True
+
+# テーブルの参照の記述はクエリ内で一貫させる
+[sqlfluff:rules:references.consistent]
+single_table_references = consistent
+
+# 予約後は原則識別子として利用しない
+# ただし、日付や時間は許す
+[sqlfluff:rules:references.keywords]
+ignore_words = sec, minute, hour, date, week, month, year

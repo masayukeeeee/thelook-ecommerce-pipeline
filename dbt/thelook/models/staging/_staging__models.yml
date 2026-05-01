@@ -25,7 +25,7 @@ models:
           - unique
           - not_null
       
-      - name: cost
+      - name: product_cost
         description: "コスト"
         tests:
           - not_null
@@ -89,7 +89,7 @@ models:
           - unique
           - not_null
       
-      - name: name
+      - name: distribution_center_name
         description: "物流センター名"
         tests:
           - not_null
@@ -171,8 +171,8 @@ models:
         tests:
           - not_null
       
-      - name: cost
-        description: "コスト"
+      - name: inventory_item_cost
+        description: "在庫商品コスト"
         tests:
           - not_null
 
