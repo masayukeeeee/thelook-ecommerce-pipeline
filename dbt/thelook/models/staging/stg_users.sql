@@ -18,6 +18,7 @@ renamed as (
 		cast(created_at as timestamp) as created_at
 
 	from source
+	qualify row_number() over (partition by email order by created_at desc) = 1
 )
 
-select * from renameds
+select * from renamed
