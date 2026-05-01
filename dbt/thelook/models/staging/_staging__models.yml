@@ -1,0 +1,202 @@
+version: 2
+
+models:
+  - name: stg_users
+    description: "ユーザー情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: user_id
+        description: "ユーザーID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: email
+        description: "email address"
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_products
+    description: "商品情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: product_id
+        description: "商品ID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: product_cost
+        description: "コスト"
+        tests:
+          - not_null
+
+      - name: category
+        description: "カテゴリ"
+
+      - name: brand
+        description: "ブランド"
+
+      - name: retail_price
+        description: "販売価格"
+        tests:
+          - not_null
+
+      - name: department
+        description: "部門"
+        tests:
+          - not_null
+      
+      - name: sku
+        description: "SKU"
+        tests:
+          - not_null
+
+      - name: distribution_center_id
+        description: "物流センターID"
+        tests:
+          - not_null
+
+  - name: stg_orders
+    description: "注文情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: order_id
+        description: "注文ID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: user_id
+        description: "ユーザーID"
+        tests:
+          - not_null
+ 
+      - name: num_of_item
+        description: "注文商品数"
+        tests:
+          - not_null
+
+      - name: status
+        description: "注文ステータス"
+        tests:
+          - not_null
+
+  - name: stg_distribution_centers
+    description: "物流センター情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: distribution_center_id
+        description: "物流センターID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: distribution_center_name
+        description: "物流センター名"
+        tests:
+          - not_null
+
+  - name: stg_events
+    description: "イベント情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: event_id
+        description: "イベントID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: session_id
+        description: "セッションID"
+        tests:
+          - not_null
+
+      - name: sequence_number
+        description: "シーケンス番号"
+        tests:
+          - not_null
+
+      - name: created_at
+        description: "発生日時"
+        tests:
+          - not_null
+
+  - name: stg_order_items
+    description: "注文商品情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: order_item_id
+        description: "注文商品ID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: order_id
+        description: "注文ID"
+        tests:
+          - not_null
+      
+      - name: product_id
+        description: "商品ID"
+        tests:
+          - not_null
+      
+      - name: inventory_item_id
+        description: "在庫商品ID"
+        tests:
+          - not_null
+      
+      - name: created_at
+        description: "作成日時"
+        tests:
+          - not_null
+
+      - name: sale_price
+        description: "販売価格"
+        tests:
+          - not_null
+
+  - name: stg_inventory_items
+    description: "在庫商品情報のStagingモデル。rawデータの前処理を行ったもの。"
+    columns:
+      - name: inventory_item_id
+        description: "在庫商品ID"
+        tests:
+          - unique
+          - not_null
+      
+      - name: product_id
+        description: "商品ID"
+        tests:
+          - not_null
+      
+      - name: created_at
+        description: "作成日時"
+        tests:
+          - not_null
+      
+      - name: inventory_item_cost
+        description: "在庫商品コスト"
+        tests:
+          - not_null
+
+      - name: product_retail_price
+        description: "商品販売価格"
+        tests:
+          - not_null
+
+      - name: product_department
+        description: "商品部門"
+        tests:
+          - not_null
+
+      - name: product_category
+        description: "商品カテゴリ"
+        tests:
+          - not_null
+
+      - name: product_sku
+        description: "商品SKU"
+        tests:
+          - not_null
+
+      - name: product_distribution_center_id
+        description: "商品物流センターID"
+        tests:
+          - not_null

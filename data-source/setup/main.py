@@ -13,7 +13,8 @@ def main():
     # Download latest version
     path = kagglehub.dataset_download(
         "mustafakeser4/looker-ecommerce-bigquery-dataset",
-        output_dir = OUTPUT_DIR
+        output_dir = OUTPUT_DIR,
+        force_download = True
     )
 
     # Show csv files
