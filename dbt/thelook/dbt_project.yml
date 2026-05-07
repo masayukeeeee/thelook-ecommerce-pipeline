@@ -32,4 +32,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 models:
   thelook:
     # Config indicated by + and applies to all files under models/example/
-    staging
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      +materialized: table
