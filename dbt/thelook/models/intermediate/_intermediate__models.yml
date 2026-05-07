@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: int_events_uri_parsed
+    description: "イベントURIをパースしてenrichした中間モデル。"
+    columns:
+      - name: event_id
+        description: "イベントID"
+        tests:
+          - unique
+          - not_null
