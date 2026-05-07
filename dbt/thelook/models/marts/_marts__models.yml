@@ -1,0 +1,150 @@
+version: 2
+
+models:
+  - name: dim_users
+    description: "ユーザのディメンションテーブル。int_usersを基に、ユーザに関する属性をまとめたモデル。"
+    columns:
+      - name: user_id
+        description: "ユーザID"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_products
+    description: "商品のディメンションテーブル。stg_productsを基に、商品に関する属性をまとめたモデル。"
+    columns:
+      - name: product_id
+        description: "商品ID"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_distribution_centers
+    description: "配送センターのディメンションテーブル。stg_distribution_centersを基に、配送センターに関する属性をまとめたモデル。"
+    columns:
+      - name: distribution_center_id
+        description: "配送センターID"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_date
+    description: "日付のディメンションテーブル。日付に関する属性をまとめたモデル。"
+    columns:
+      - name: date_key
+        description: "日付キー（YYYYMMDD形式）"
+        tests:
+          - unique
+          - not_null
+
+  - name: fct_orders
+    description: "注文のファクトテーブル。int_ordersを基に、注文に関する指標を集計したモデル。"
+    columns:
+      - name: order_id
+        description: "注文ID"
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: "ユーザID（dim_usersへの外部キー）"
+        tests:
+          - not_null
+      - name: created_date_key
+        description: "注文作成日の日付キー（dim_dateへの外部キー）"
+        tests:
+          - not_null
+
+  - name: fct_order_items
+    description: "注文アイテムのファクトテーブル。int_ordersとstg_inventory_itemsを基に、注文アイテムに関する指標を集計したモデル。"
+    columns:
+      - name: order_item_id
+        description: "注文アイテムID"
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+        description: "注文ID（fct_ordersへの外部キー）"
+        tests:
+          - not_null
+      - name: product_id
+        description: "商品ID（dim_productsへの外部キー）"
+        tests:
+          - not_null
+      - name: inventory_item_id
+        description: "在庫アイテムID（stg_inventory_itemsへの外部キー）"
+        tests:
+          - not_null
+      - name: gross_profit
+        description: "注文アイテムの粗利（売上 - 原価）"
+        tests:
+          - not_null
+
+  - name: fct_sessions
+    description: "セッションのファクトテーブル。int_events_uri_parsedを基に、セッションに関する指標を集計したモデル。"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - session_id
+              - user_id
+
+  - name: fct_inventory_items
+    description: "在庫アイテムのファクトテーブル。stg_inventory_itemsを基に、在庫アイテムに関する指標を集計したモデル。"
+    columns:
+      - name: inventory_item_id
+        description: "在庫アイテムID"
+        tests:
+          - unique
+          - not_null
+      - name: product_id
+        description: "商品ID（dim_productsへの外部キー）"
+        tests:
+          - not_null
+      - name: product_distribution_center_id
+        description: "配送センターID（dim_distribution_centersへの外部キー）"
+        tests:
+          - not_null
+
+  - name: fct_purchase_funnels
+    description: "購買ファネルの各ステップへの到達状況と離脱を記録するテーブル"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - session_id
+              - step_no
+    columns:
+      - name: session_id
+        description: "セッションID"
+        tests:
+          - not_null
+
+      - name: step_no
+        description: "ステップ番号(1..5)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+
+      - name: step_name
+        description: "ステップ名(home|department|product|cart|purchase)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'department', 'product', 'cart', 'purchase']
+
+      - name: dropped_here
+        description: "このステップで離脱したか"
+        tests:
+          - not_null
+
+  - name: fct_pageviews
+    description: "ページビューのファクトテーブル。int_events_uri_parsedを基に、ページビューに関する指標を集計したモデル。"
+    columns:
+      - name: event_id
+        description: "イベントID"
+        tests:
+          - unique
+          - not_null

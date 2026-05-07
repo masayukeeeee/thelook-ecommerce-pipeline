@@ -1,19 +1,15 @@
-with stg_users as (
+with source as (
   select * from {{ ref('stg_users') }}
 ),
 
-select
-  user_id,
-  first_name,
-  last_name,
-  email,
-  age,
-  gender,
-  country,
-  state,
-  city,
-  traffic_source,
-  created_at,
-  email_domain,
-  email_local
-from stg_users
+output as (
+  select
+    user_id,
+    email_domain,
+    country,
+    traffic_source,
+    created_at
+  from source
+)
+
+select * from output
