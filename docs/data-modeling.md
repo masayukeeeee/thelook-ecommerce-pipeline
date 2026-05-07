@@ -136,7 +136,7 @@ erDiagram
 
     dim_users {
         int user_id PK "ユーザーID"
-        string email "メールアドレス"
+        string email_domain "メールアドレスのドメイン"
         string country "国"
         string traffic_source "獲得チャネル"
         timestamp created_at "登録日時"
