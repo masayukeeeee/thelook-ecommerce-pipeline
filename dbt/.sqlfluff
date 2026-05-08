@@ -86,4 +86,4 @@ single_table_references = consistent
 # 予約後は原則識別子として利用しない
 # ただし、日付や時間は許す
 [sqlfluff:rules:references.keywords]
-ignore_words = sec, minute, hour, date, week, month, year, day
+ignore_words = sec, minute, hour, date, week, month, year, day, year_month, quarter, year_quarter

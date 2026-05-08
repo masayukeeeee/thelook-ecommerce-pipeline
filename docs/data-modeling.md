@@ -164,8 +164,8 @@ erDiagram
         int year "暦年"
         int month "月"
         int day "日"
-        int iso_year "ISO 8601 の年"
-        int iso_week_of_year "ISO 8601 の週番号 (1-53)"
+        string iso_year_week "YYYY-Www (例: 2024-W03) — ISO週次時系列軸"
+        string year_month "YYYY-MM (例: 2024-01) — 月次時系列軸"
         string day_of_week_en "曜日（英語: Monday..Sunday）"
         string day_of_week_ja "曜日（日本語: 月..日）"
         boolean is_weekend "週末フラグ"
@@ -378,7 +378,7 @@ raw の events は未ログイン状態を多く含み、`fct_sessions.user_id` 
 * 祝日マスタや営業日マスタなし
 * セール期間・イベント期間データなし
 
-当面は year / month / day / weekday に加え、**暦年 (`year`) と ISO 年 (`iso_year`) / ISO 週 (`iso_week_of_year`) を併設**する最小構成にとどまる。年末年始（例: 2024-12-30 は `year=2024` だが `iso_year=2025`）で集計軸が暦年か ISO 年かによって結果が変わるため、BI 側で意図に応じて使い分ける。**データ重複を避ける観点では作らない選択も合理的**だが、学習目的を優先して採用とした。実利重視なら、各 Fact の `*_at` を BI 側で `EXTRACT()` する代替案でも要件は満たせる。
+当面は year / month / day / weekday に加え、**月次軸 (`year_month`) と ISO 週次軸 (`iso_year_week`) を併設**する最小構成にとどまる。年末年始（例: 2024-12-30 の `iso_year_week='2025-W01'`）で集計軸が暦年か ISO 年かによって結果が変わるため、BI 側で意図に応じて使い分ける。**データ重複を避ける観点では作らない選択も合理的**だが、学習目的を優先して採用とした。実利重視なら、各 Fact の `*_at` を BI 側で `EXTRACT()` する代替案でも要件は満たせる。
 
 #### 日付範囲
 
