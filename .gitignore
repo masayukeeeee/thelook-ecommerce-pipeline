@@ -223,3 +223,6 @@ data-source/data/raw/.complete/
 
 # files
 .DS_Store
+
+# duckdb
+*.duckdb
