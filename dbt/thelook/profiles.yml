@@ -4,3 +4,10 @@ thelook:
     dev:
       type: duckdb
       path: 'thelook.duckdb'
+    prod:
+      type: duckdb
+      path: "md:thelook?motherduck_token={{ env_var('MOTHERDUCK_TOKEN') }}"
+      schema: main
+      threads: 4
+      extensions:
+        - motherduck
