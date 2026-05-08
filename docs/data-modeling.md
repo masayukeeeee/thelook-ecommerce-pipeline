@@ -154,18 +154,20 @@ erDiagram
     }
 
     dim_distribution_centers {
-        int distribution_center_id PK "センターID"
-        string distribution_center_name "センター名"
+        int product_distribution_center_id PK "センターID（在庫個体の保管センター）"
+        string product_distribution_center_name "センター名"
     }
 
     dim_date {
         int date_key PK "YYYYMMDD"
         date date "日付"
-        int year "年"
+        int year "暦年"
         int month "月"
         int day "日"
-        int week_of_year "週番号"
-        string day_of_week "曜日"
+        int iso_year "ISO 8601 の年"
+        int iso_week_of_year "ISO 8601 の週番号 (1-53)"
+        string day_of_week_en "曜日（英語: Monday..Sunday）"
+        string day_of_week_ja "曜日（日本語: 月..日）"
         boolean is_weekend "週末フラグ"
     }
 
@@ -190,7 +192,7 @@ erDiagram
         int inventory_item_id "在庫個体ID(degenerate)"
         int user_id FK "ユーザーID"
         int product_id FK "商品ID"
-        int distribution_center_id FK "センターID"
+        int product_distribution_center_id FK "センターID（在庫個体の保管センター）"
         int created_date_key FK "発注日"
         int shipped_date_key FK "出荷日"
         int delivered_date_key FK "配送完了日"
@@ -204,7 +206,7 @@ erDiagram
     fct_inventory_items {
         int inventory_item_id PK "在庫個体ID"
         int product_id FK "商品ID"
-        int distribution_center_id FK "センターID"
+        int product_distribution_center_id FK "センターID（在庫個体の保管センター）"
         int created_date_key FK "在庫登録日"
         int sold_date_key FK "販売日(NULL=未販売)"
         float inventory_item_cost "個体コスト"
@@ -283,6 +285,17 @@ erDiagram
 
 `fct_order_items.gross_profit = sale_price - inventory_item_cost`。**個体コスト**（`stg_inventory_items.inventory_item_cost`）を使う。商品マスタの `products.cost`（平均コスト）は仕入れ時期で変動するため使わない。
 
+### 7.1.1 `fct_inventory_items.days_in_stock` の基準時点 (as_of)
+
+未販売個体の在庫滞留日数は「いつ時点で何日経っているか」を決めないと計算できない。`current_timestamp` / `current_date` で実行時刻を使うと、dbt run の実行時刻に依存して結果が毎日変わる（再現性が無い）うえ、raw のスナップショットが古い場合（本プロジェクトでは raw の最終観測が 2024-01-21、ある時点では `current_date` は 2026 年）に実態とかけ離れた値（平均 4.3 年滞留など）になる。
+
+そのため `days_in_stock` は **raw の最終観測時点 (`greatest(max(created_at), max(sold_at))`) を as_of** として算出する方針に揃える。
+
+* 売却済（`is_sold=true`）: `sold_at - created_at`（raw に確定値）
+* 未売却（`is_sold=false`）: `as_of - created_at`（dbt 側で導出）
+
+これにより、同じ raw に対しては dbt run のたびに同じ結果が返る。raw が更新（追記）されると as_of が前進し、未売却個体の `days_in_stock` も自然に追従する。「特定時点の在庫スナップショットを再現したい」要件が出た段階で、`var('inventory_as_of_date')` を追加して上書き可能にする拡張余地を残す。
+
 ### 7.2 SCD Type 1 で運用
 
 `dim_users` などのディメンションは **Type 1（最新で上書き）**。raw に履歴がないため Type 2 は不可。「購入時点の国」のような時点属性が必要なら、Fact 側にスナップショット列として持つ（例: `fct_order_items.user_country_at_purchase`）。
@@ -311,6 +324,12 @@ erDiagram
 #### セッション内容の前提
 
 実データでは **全セッションが必ず `event_type='product'` を含む**（681,759 / 681,759）。`fct_sessions` の中心は商品閲覧であり、`home` などは補助的な属性扱い。
+
+#### セッションのユーザー識別の前提
+
+raw の events は未ログイン状態を多く含み、`fct_sessions.user_id` の **約 73% が unknown member（user_id = -1）** に集約される（実データで `unknown 73.3% / registered 22.4% / inferred 4.3%`）。`fct_pageviews` でも約半分（`unknown 49.0%`）が unknown。一方で `fct_orders / fct_order_items` には unknown は 0 で、registered + inferred で完全網羅される（注文には raw 側で必ず user_id が振られているため）。
+
+このため Web 行動 Fact 系の DAU/WAU/MAU を `count(distinct user_id)` で素朴に算出すると **unknown を 1 ユーザーと数えてしまう過小推定**になる。BI 側では明示的に `where user_type != 'unknown'` でフィルタするか、unknown を別系列として可視化する。詳細は 7.9 節を参照。
 
 ### 7.6 行動マーカーの扱い
 
@@ -359,7 +378,106 @@ erDiagram
 * 祝日マスタや営業日マスタなし
 * セール期間・イベント期間データなし
 
-当面は year / month / day / weekday 程度の最小構成にとどまる。**データ重複を避ける観点では作らない選択も合理的**だが、学習目的を優先して採用とした。実利重視なら、各 Fact の `*_at` を BI 側で `EXTRACT()` する代替案でも要件は満たせる。
+当面は year / month / day / weekday に加え、**暦年 (`year`) と ISO 年 (`iso_year`) / ISO 週 (`iso_week_of_year`) を併設**する最小構成にとどまる。年末年始（例: 2024-12-30 は `year=2024` だが `iso_year=2025`）で集計軸が暦年か ISO 年かによって結果が変わるため、BI 側で意図に応じて使い分ける。**データ重複を避ける観点では作らない選択も合理的**だが、学習目的を優先して採用とした。実利重視なら、各 Fact の `*_at` を BI 側で `EXTRACT()` する代替案でも要件は満たせる。
+
+#### 日付範囲
+
+`dim_date` の生成範囲は **2016-01-01 から、当年の年初 + 3 年 - 1 日** までを動的に生成する（`current_date()` 依存）。raw データの開始である 2019 年から十分な余裕を持って遡及できるよう下端を 2016 にし、将来予算・需要予測など先付きの分析にも備えて上端を当年 +3 年とした。`current_date()` 依存のため、本モデルは**毎日同じ結果になるとは限らない**点に注意（M3 で議論済み）。
+
+### 7.9 raw 不整合と Inferred / Unknown Member の採用
+
+raw データには以下の不整合があり、Fact から Dim への単純な参照整合性 (FK relationships) が成立しない。
+
+* `users.csv` に欠落 ID が存在し、`orders.user_id` / `order_items.user_id` の一部が `users` に存在しない（孤児: orders 約 19,942 件、order_items 約 29,094 件）
+* `events` の未ログイン行は raw 側で `user_id` が NULL で記録される（events 全体で多数）
+
+これらに対して、ナイーブに「孤児を捨てる」「NULL を残す」と次の弊害が出る:
+
+* 売上 Fact から孤児を捨てると **GMV / 件数が過小**になる
+* `fct_*.user_id` が NULL のままだと `dim_users` への relationships test が成立しない
+* BI 側で「不明ユーザー」用の特別なケースハンドリングが必要になる
+
+そこで Kimball の **Inferred Member / Unknown Member パターン**を `dim_users` に採用した。
+
+#### dim_users の構成
+
+`dim_users` は `user_type` 列で 3 種類の行を区別する。
+
+| user_type | 件数 | 由来 | 属性 (email_domain / country / traffic_source / created_at) |
+| --- | ---: | --- | --- |
+| registered | 84,011 | `stg_users` 由来の正規登録ユーザー | 取得済み |
+| **inferred** | 12,795 | events / orders で参照されているが users マスタには無いユーザー | NULL |
+| **unknown** | 1 | `user_id = -1` の単一番兵 | NULL |
+
+* **Inferred Member**: `int_users_inferred_in_events` / `int_users_inferred_in_orders` を incremental に積み上げて参照済み user_id 集合を保持し、`dim_users` で `where not exists (registered)` の anti-join で抽出する
+* **Unknown Member**: `user_id = -1` を **1 行だけ**入れ、events で `user_id` が NULL の行は intermediate (`int_events_uri_parsed`) で `coalesce(user_id, -1)` により全て -1 に集約する
+
+#### Fact ごとの user_type 分布（実データ）
+
+| Fact | rows | registered | inferred | **unknown** |
+| --- | ---: | ---: | ---: | ---: |
+| fct_orders | 125,226 | 84.1% | 15.9% | 0% |
+| fct_order_items | 181,759 | 84.0% | 16.0% | 0% |
+| fct_pageviews | 1,528,642 | 42.8% | 8.2% | **49.0%** |
+| fct_sessions | 681,759 | 22.4% | 4.3% | **73.3%** |
+
+* 注文 Fact 系は `unknown` が 0（raw 側で user_id 必須）
+* Web 行動 Fact 系は未ログインが大多数を占めるため、`unknown` が支配的
+
+#### 分析時の運用ガイド
+
+* **顧客 KPI（LTV / RFM / コホート 等）** は `fct_orders / fct_order_items` ベースで算出する。unknown が混入しない。
+* **Web 行動 KPI（DAU / WAU / MAU / CVR 等）** は `where user_type != 'unknown'` でフィルタするか、unknown を「ログイン前訪問」として別系列で可視化する。素朴に `count(distinct user_id)` すると unknown を 1 ユーザーと数えてしまう。
+* **獲得チャネル別の購買行動分析**（B テーマ）は `fct_order_items × dim_users(traffic_source)` で行う。inferred は `traffic_source` が NULL なため、`coalesce(traffic_source, '(unknown)')` で集約する。
+
+#### この設計のメリット
+
+* `fct_*.user_id` に NULL が残らず、すべての行が `dim_users` の何らかの行を必ず指す（参照整合性 OK）
+* 売上 / 件数の過小評価が起きない
+* 「unknown を含むかどうか」は BI 側で `user_type` フィルタで制御できる
+* 将来 raw が修正されて inferred が registered に昇格しても、`dim_users` の再ビルドだけで自動的に反映される
+
+### 7.10 status と is_cancelled / is_returned のロジック保護
+
+`fct_orders.is_cancelled` / `is_returned` は `status` から導出される派生フラグ。raw の `status` は 5 値（`Processing / Shipped / Complete / Cancelled / Returned`）に固定されるため、yml で `accepted_values` テストを当てて値域を宣言的に保護する。
+
+加えて、派生フラグと元値の整合性を **モデルレベル `dbt_utils.expression_is_true`** で常時保護する:
+
+* `is_cancelled = (status = 'Cancelled')`
+* `is_returned = (status = 'Returned')`
+
+これは過去に `status = 'cancelled'`（小文字）と書かれていて全行 false になっていたバグ（M8）の再発を防ぐためのレグレッションガードでもある。raw 側で大小ブレが起きた場合は `accepted_values` が先に検出する。
+
+### 7.11 num_of_item の整合性保護
+
+`fct_orders.num_of_item`（注文ヘッダの「注文商品数」）と、同じ `order_id` に紐づく `fct_order_items` の**行数**は一致する不変条件が成立する（実データで全件一致を確認済み）。
+
+これを singular test (`tests/assert_fct_orders_num_of_item_matches_items.sql`) で常時保護する。raw に明細の取りこぼしや重複注文が混入したときの早期検出装置として機能する（M7）。
+
+### 7.12 Future work
+
+#### Intermediate 層の拡充（M1）
+
+現状の Intermediate は uri パース系（`int_events_uri_parsed`）と inferred user 抽出系（`int_users_inferred_in_*`）にとどまっており、注文系 Fact は `fct_*` の中で直接結合・集計を行っている。読みやすさ・再利用性・テスト粒度の観点では、以下の Intermediate を追加する余地がある。
+
+* `int_orders_aggregated`: 明細を注文単位に集計（合計売上・合計コスト・粗利・出荷/配送リードタイム）。`fct_orders` の組み立て元
+* `int_order_items_with_cost`: `stg_order_items` に `stg_inventory_items.inventory_item_cost` を結合した、明細粒度のメジャー素材。`fct_order_items` の組み立て元
+
+これにより、
+
+* `fct_orders` / `fct_order_items` の SQL を「最終整形だけ」に薄くできる
+* 中間集計に対して個別にテストを当てられる（メジャーの集約ロジック単位の保護）
+* 将来別 Fact（例: 月次集計、ユーザー × 月の購買サマリ）を作るときに既存の中間結果を再利用できる
+
+ただし現状の規模（明細レベルでも 18 万行程度）と複雑さでは Intermediate を増やすメリットは限定的。**raw が増える / 別 Fact を派生する必要が出た時点で着手する future work** として位置付ける。
+
+#### dim_users の Type 2 化
+
+現状 `dim_users` は SCD Type 1（最新で上書き）。「購入時点の国 / traffic_source」のような時点属性が必要な場合は、Fact 側にスナップショット列を持たせる方針（7.2 節）。raw に履歴が無いため Type 2 化は不可だが、将来 raw が users の更新履歴を持つようになれば検討する。
+
+#### 在庫スナップショットの再現
+
+`fct_inventory_items.days_in_stock` は raw 最新観測時点を as_of として算出している（7.1.1 節）。「特定時点（例: 月末時点）の在庫スナップショットを再現したい」要件が出た時点で、`var('inventory_as_of_date')` を導入して上書き可能にする。
 
 ---
 
