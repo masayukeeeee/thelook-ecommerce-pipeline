@@ -88,10 +88,10 @@ models:
         description: "月（1-12）"
       - name: day
         description: "日（1-31）"
-      - name: iso_week_of_year
-        description: "ISO 8601 の週番号（1-53）。月曜始まり、1月4日を含む週を W01 とする"
-      - name: iso_year
-        description: "ISO 8601 の年。年末年始は暦年 (year) と異なる場合がある（例: 2024-12-30 は year=2024, iso_year=2025）"
+      - name: iso_year_week
+        description: "ISO 8601 の年-週番号の文字列（YYYY-Www 形式、例: 2024-W03）。ISO 週次の時系列軸として使う。文字列のまま辞書順ソートで時系列順となる"
+      - name: year_month
+        description: "暦年-月の文字列（YYYY-MM 形式、例: 2024-01）。月次の時系列軸として使う"
       - name: day_of_week_en
         description: "曜日（英語: Monday..Sunday）"
       - name: day_of_week_ja
