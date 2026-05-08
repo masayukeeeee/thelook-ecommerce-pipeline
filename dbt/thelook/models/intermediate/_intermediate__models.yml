@@ -2,10 +2,85 @@ version: 2
 
 models:
   - name: int_events_uri_parsed
-    description: "イベントURIをパースしてenrichした中間モデル。"
+    description: |
+      stg_events の uri をパースして閲覧対象を派生させた中間モデル（fct_pageviews / fct_sessions / fct_purchase_funnels の共通入力）。
+      `^/product/([0-9]+)` から viewed_product_id、`^/department/([^/]+)/category/([^/]+)/brand/([^/]+)` から viewed_department_gender / viewed_category / viewed_brand を抽出する。
+      未ログインで user_id が NULL の行は -1 (unknown user 番兵) に置き換える。
     columns:
       - name: event_id
         description: "イベントID"
         tests:
           - unique
+          - not_null
+      - name: session_id
+        description: "セッションID"
+        tests:
+          - not_null
+      - name: user_id
+        description: "ユーザーID（NULL は -1=unknown user に集約）"
+        tests:
+          - not_null
+      - name: created_at
+        description: "イベント発生時刻"
+        tests:
+          - not_null
+      - name: sequence_number
+        description: "セッション内シーケンス番号"
+        tests:
+          - not_null
+      - name: event_type
+        description: "イベント種別（home/department/product/cart/purchase/cancel など）"
+        tests:
+          - not_null
+      - name: uri
+        description: "閲覧URI"
+      - name: viewed_product_id
+        description: "閲覧商品ID（event_type='product' のみ。それ以外は空文字）"
+      - name: viewed_department_gender
+        description: "閲覧部門の性別（event_type='department' のみ。それ以外は空文字）"
+      - name: viewed_category
+        description: "閲覧カテゴリ（event_type='department' のみ。それ以外は空文字）"
+      - name: viewed_brand
+        description: "閲覧ブランド（event_type='department' のみ。それ以外は空文字）"
+      - name: traffic_source
+        description: "流入元"
+      - name: browser_name
+        description: "ブラウザ名"
+
+  - name: int_users_inferred_in_events
+    description: |
+      stg_events で参照された user_id を集約した中間モデル（incremental, merge）。
+      raw の users.csv に欠損している user_id を dim_users へ inferred member として組み込むための入力。
+    columns:
+      - name: user_id
+        description: "ユーザーID"
+        tests:
+          - unique
+          - not_null
+      - name: first_seen_at
+        description: "events での初回参照時刻"
+        tests:
+          - not_null
+      - name: last_seen_at
+        description: "events での最終参照時刻"
+        tests:
+          - not_null
+
+  - name: int_users_inferred_in_orders
+    description: |
+      stg_orders で参照された user_id を集約した中間モデル（incremental, merge）。
+      raw の users.csv に欠損している user_id を dim_users へ inferred member として組み込むための入力。
+    columns:
+      - name: user_id
+        description: "ユーザーID"
+        tests:
+          - unique
+          - not_null
+      - name: first_seen_at
+        description: "orders での初回参照時刻"
+        tests:
+          - not_null
+      - name: last_seen_at
+        description: "orders での最終参照時刻"
+        tests:
           - not_null
