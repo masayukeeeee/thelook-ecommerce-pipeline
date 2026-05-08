@@ -510,3 +510,47 @@ models:
         description: "セッション最後のページか（sequence_number = max(sequence_number)）"
         tests:
           - not_null
+  
+  - name: fct_weekly_user_growth
+    description: "週次の新規登録ユーザー数と累積登録ユーザー数を計算するファクトテーブル"
+    meta:
+      label: "[Gold] Weekly User Growth"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - year_month
+              - iso_year_week
+    columns:
+      - name: iso_year_week
+        description: "ISO 8601 の年-週番号の文字列（YYYY-Www 形式、例: 2024-W03）。ISO 週次の時系列軸として使う。文字列のまま辞書順ソートで時系列順となる"
+        meta:
+          dimension:
+            type: string
+            label: "ISO Year Week"
+      - name: year_month
+        description: "暦年-月の文字列（YYYY-MM 形式、例: 2024-01）。月次の時系列軸として使う"
+        meta:
+          dimension:
+            type: string
+            label: "Year Month"
+      - name: new_registered_users
+        description: "新規登録ユーザー数"
+        meta:
+          dimension:
+            type: number
+            label: "New Registered Users"
+          metrics:
+            total_new_users:
+              type: sum
+              label: "Total New Users"
+      - name: cumulative_registered_users
+        description: "累積登録ユーザー数"
+        meta:
+          dimension:
+            type: number
+            label: "Cumulative Registered Users"
+          metrics:
+            max_cumulative:
+              type: max
+              label: "Max Cumulative Registered Users"
