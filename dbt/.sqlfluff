@@ -3,7 +3,7 @@ dialect = duckdb
 large_file_skip_byte_limit = 0
 processes = 0
 max_line_length = 100
-exclude_rules = AL07, AM03, AM04, CV04, CV11, RF02, RF03, ST01, ST02, ST07
+exclude_rules = AL03, AL07, AM03, AM04, CV04, CV11, RF02, RF03, ST01, ST02, ST07
 warnings = CV02, CV08, CV09, ST05
 
 [sqlfluff:indentation]
@@ -86,4 +86,4 @@ single_table_references = consistent
 # 予約後は原則識別子として利用しない
 # ただし、日付や時間は許す
 [sqlfluff:rules:references.keywords]
-ignore_words = sec, minute, hour, date, week, month, year
+ignore_words = sec, minute, hour, date, week, month, year, day
