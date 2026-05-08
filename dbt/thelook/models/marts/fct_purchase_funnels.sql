@@ -22,11 +22,11 @@ funnel_steps as (
     step_name,
     reached_at,
     case step_name
-      when 'home'       then 1
+      when 'home' then 1
       when 'department' then 2
-      when 'product'    then 3
-      when 'cart'       then 4
-      when 'purchase'   then 5
+      when 'product' then 3
+      when 'cart' then 4
+      when 'purchase' then 5
     end as step_no
   from first_hits
 ),
@@ -40,13 +40,19 @@ output as (
     cast(strftime(reached_at, '%Y%m%d') as int) as reached_date_key,
     step_name,
     reached_at,
-    
-    -- セッション内の「一番最初のイベント時刻」からの経過秒数
-    date_diff('second', min(reached_at) over (partition by session_id), reached_at) as time_from_session_start_sec,
-    
-    -- 時間順で並べた時に、次のステップが存在しなければ「ここで離脱（true）」
-    lead(step_no) over (partition by session_id order by reached_at) is null as dropped_here
-    
+    date_diff(
+      'second',
+      min(reached_at) over (partition by session_id),
+      reached_at
+    ) as time_from_session_start_sec,
+    case
+      when step_no = 5 then false
+      when (step_no + 1) in (
+        select step_no from funnel_steps as fsp
+        where fsp.session_id = funnel_steps.session_id
+      ) then false
+      else true
+    end as dropped_here
   from funnel_steps
 )
 

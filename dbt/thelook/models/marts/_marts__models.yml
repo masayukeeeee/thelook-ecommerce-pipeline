@@ -2,13 +2,33 @@ version: 2
 
 models:
   - name: dim_users
-    description: "ユーザのディメンションテーブル。int_usersを基に、ユーザに関する属性をまとめたモデル。"
+    description: |
+      ユーザーのディメンションテーブル。3 種類の行を含む（user_type 列で識別）。
+      - registered: stg_users 由来の正規登録ユーザー
+      - inferred: events / orders で参照されているが users マスタには無いユーザー（Inferred Member）
+      - unknown: user_id 不明イベント用の単一番兵（user_id = -1）。Unknown Member
+      raw データの不整合（users.csv に欠落 ID が存在する、events の未ログイン状態 etc.）を吸収するための設計（7.9 節参照）。
     columns:
       - name: user_id
-        description: "ユーザID"
+        description: "ユーザーID（unknown member は -1）"
         tests:
           - unique
           - not_null
+      - name: email_domain
+        description: "メールアドレスのドメイン（registered のみ。inferred / unknown は NULL）"
+      - name: country
+        description: "国（registered のみ。inferred / unknown は NULL）"
+      - name: traffic_source
+        description: "獲得チャネル（registered のみ。inferred / unknown は NULL）"
+      - name: created_at
+        description: "登録日時（registered のみ。inferred / unknown は NULL）"
+      - name: user_type
+        description: "ユーザー種別（registered / inferred / unknown）"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['registered', 'inferred', 'unknown']
 
   - name: dim_products
     description: "商品のディメンションテーブル。stg_productsを基に、商品に関する属性をまとめたモデル。"
@@ -18,27 +38,76 @@ models:
         tests:
           - unique
           - not_null
+      - name: department
+        description: "部門（性別）"
+      - name: category
+        description: "カテゴリ"
+      - name: brand
+        description: "ブランド"
+      - name: sku
+        description: "SKU"
+      - name: retail_price
+        description: "販売価格（マスタ値）"
+      - name: product_cost
+        description: "原価（マスタ値）。粗利計算には使わず、明細粒度の inventory_item_cost を使う（7.1 節参照）"
+      - name: distribution_center_id
+        description: "保管センターID（dim_distribution_centersへの外部キー）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_distribution_centers')
+                field: product_distribution_center_id
 
   - name: dim_distribution_centers
     description: "配送センターのディメンションテーブル。stg_distribution_centersを基に、配送センターに関する属性をまとめたモデル。"
     columns:
-      - name: distribution_center_id
-        description: "配送センターID"
+      - name: product_distribution_center_id
+        description: "配送センターID（在庫個体の保管センター）"
         tests:
           - unique
           - not_null
+      - name: product_distribution_center_name
+        description: "配送センター名"
+        tests:
+          - not_null
 
   - name: dim_date
-    description: "日付のディメンションテーブル。日付に関する属性をまとめたモデル。"
+    description: "日付のディメンションテーブル。日付に関する属性をまとめたモデル。範囲は 2016-01-01 から、当年の年初 + 3 年 - 1 日 までを動的生成する。"
     columns:
       - name: date_key
         description: "日付キー（YYYYMMDD形式）"
         tests:
           - unique
           - not_null
+      - name: date
+        description: "日付"
+      - name: year
+        description: "暦年"
+      - name: month
+        description: "月（1-12）"
+      - name: day
+        description: "日（1-31）"
+      - name: iso_week_of_year
+        description: "ISO 8601 の週番号（1-53）。月曜始まり、1月4日を含む週を W01 とする"
+      - name: iso_year
+        description: "ISO 8601 の年。年末年始は暦年 (year) と異なる場合がある（例: 2024-12-30 は year=2024, iso_year=2025）"
+      - name: day_of_week_en
+        description: "曜日（英語: Monday..Sunday）"
+      - name: day_of_week_ja
+        description: "曜日（日本語: 月..日）"
+      - name: is_weekend
+        description: "週末フラグ（土日なら true）"
 
   - name: fct_orders
     description: "注文のファクトテーブル。int_ordersを基に、注文に関する指標を集計したモデル。"
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "is_cancelled = (status = 'Cancelled')"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "is_returned = (status = 'Returned')"
     columns:
       - name: order_id
         description: "注文ID"
@@ -49,13 +118,47 @@ models:
         description: "ユーザID（dim_usersへの外部キー）"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
       - name: created_date_key
         description: "注文作成日の日付キー（dim_dateへの外部キー）"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: num_of_item
+        description: "注文商品数"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 1"
+      - name: status
+        description: "注文ステータス"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Processing', 'Shipped', 'Complete', 'Cancelled', 'Returned']
+      - name: is_cancelled
+        description: "キャンセルフラグ"
+        tests:
+          - not_null
+      - name: is_returned
+        description: "返品フラグ"
+        tests:
+          - not_null
 
   - name: fct_order_items
-    description: "注文アイテムのファクトテーブル。int_ordersとstg_inventory_itemsを基に、注文アイテムに関する指標を集計したモデル。"
+    description: "注文アイテムのファクトテーブル。stg_orders / stg_order_items / stg_inventory_itemsを結合し、明細単位のメジャーと日付キーを保持する売上分析の最小単位。"
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "gross_profit = sale_price - inventory_item_cost"
     columns:
       - name: order_item_id
         description: "注文アイテムID"
@@ -63,36 +166,172 @@ models:
           - unique
           - not_null
       - name: order_id
-        description: "注文ID（fct_ordersへの外部キー）"
+        description: "注文ID（fct_ordersへの外部キー / degenerate dimension）"
         tests:
           - not_null
+      - name: user_id
+        description: "ユーザID（dim_usersへの外部キー）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
       - name: product_id
         description: "商品ID（dim_productsへの外部キー）"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
       - name: inventory_item_id
-        description: "在庫アイテムID（stg_inventory_itemsへの外部キー）"
+        description: "在庫アイテムID（degenerate dimension）"
+        tests:
+          - not_null
+      - name: product_distribution_center_id
+        description: "在庫個体が保管されている物流センターID（dim_distribution_centersへの外部キー）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_distribution_centers')
+                field: product_distribution_center_id
+      - name: created_date_key
+        description: "明細作成日の日付キー（dim_dateへの外部キー / YYYYMMDD）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: shipped_date_key
+        description: "出荷日の日付キー（dim_dateへの外部キー / 未出荷はNULL）"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: delivered_date_key
+        description: "配送完了日の日付キー（dim_dateへの外部キー / 未配送はNULL）"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: sale_price
+        description: "明細の販売価格"
+        tests:
+          - not_null
+      - name: inventory_item_cost
+        description: "明細に紐づく在庫個体の原価"
         tests:
           - not_null
       - name: gross_profit
-        description: "注文アイテムの粗利（売上 - 原価）"
+        description: "明細の粗利（sale_price - inventory_item_cost）"
         tests:
           - not_null
+      - name: ship_lead_days
+        description: "出荷リードタイム（明細作成日→出荷日の日数）"
+      - name: deliver_lead_days
+        description: "配送リードタイム（明細作成日→配送完了日の日数）"
 
   - name: fct_sessions
-    description: "セッションのファクトテーブル。int_events_uri_parsedを基に、セッションに関する指標を集計したモデル。"
+    description: |
+      セッションのファクトテーブル（粒度: 1 セッション）。int_events_uri_parsed を集約。
+      未ログインのセッションが大半を占めるため user_id は unknown (-1) に集約される（実データで約 73%、7.9 節参照）。
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
               - session_id
               - user_id
+    columns:
+      - name: session_id
+        description: "セッションID"
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: "ユーザーID（dim_usersへの外部キー / 未ログインは -1=unknown）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: started_at
+        description: "セッション開始時刻"
+        tests:
+          - not_null
+      - name: ended_at
+        description: "セッション終了時刻"
+        tests:
+          - not_null
+      - name: started_date_key
+        description: "セッション開始日（dim_dateへの外部キー / YYYYMMDD）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: session_duration_sec
+        description: "セッション滞在秒数（ended_at - started_at）"
+        tests:
+          - not_null
+      - name: event_count
+        description: "セッション内イベント数"
+        tests:
+          - not_null
+      - name: page_view_count
+        description: "セッション内ページビュー数（event_type が home/department/product のもの）"
+        tests:
+          - not_null
+      - name: has_product
+        description: "セッション内に product イベントを含むか"
+        tests:
+          - not_null
+      - name: has_cart
+        description: "セッション内に cart イベントを含むか"
+        tests:
+          - not_null
+      - name: has_purchase
+        description: "セッション内に purchase イベントを含むか"
+        tests:
+          - not_null
+      - name: has_cancel
+        description: "セッション内に cancel イベントを含むか"
+        tests:
+          - not_null
+      - name: landed_uri
+        description: "ランディングURI（セッション内最初のイベントの uri）"
+      - name: exited_uri
+        description: "離脱URI（セッション内最後のイベントの uri）"
+      - name: traffic_source
+        description: "セッション開始時の流入元（arg_min(traffic_source, created_at)）"
+      - name: browser_name
+        description: "セッション開始時のブラウザ（arg_min(browser_name, created_at)）"
+      - name: session_outcome
+        description: "セッションの結果（browse_only / cart_abandoned / purchased / cancelled）"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['browse_only', 'cart_abandoned', 'purchased', 'cancelled']
 
   - name: fct_inventory_items
-    description: "在庫アイテムのファクトテーブル。stg_inventory_itemsを基に、在庫アイテムに関する指標を集計したモデル。"
+    description: |
+      在庫個体のファクトテーブル（粒度: 1 在庫個体）。販売済み・未販売の両方を含む。
+      未販売個体の days_in_stock は raw の観測時点（max(created_at) と max(sold_at) の遅いほう）を as_of として算出する。
+      dbt の実行時刻には依存しないため、同じ raw に対しては同じ結果を返す（M5）。
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "days_in_stock >= 0"
     columns:
       - name: inventory_item_id
-        description: "在庫アイテムID"
+        description: "在庫個体ID"
         tests:
           - unique
           - not_null
@@ -100,25 +339,71 @@ models:
         description: "商品ID（dim_productsへの外部キー）"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
       - name: product_distribution_center_id
         description: "配送センターID（dim_distribution_centersへの外部キー）"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_distribution_centers')
+                field: product_distribution_center_id
+      - name: created_date_key
+        description: "在庫登録日（dim_dateへの外部キー、YYYYMMDD）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: sold_date_key
+        description: "販売日（dim_dateへの外部キー、YYYYMMDD）。未販売の場合は NULL"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: inventory_item_cost
+        description: "在庫個体のコスト"
+        tests:
+          - not_null
+      - name: days_in_stock
+        description: |
+          在庫滞留日数。
+          - 売却済（is_sold=true）: sold_at - created_at
+          - 未売却（is_sold=false）: as_of - created_at
+          ここで as_of は raw の最終観測時点（greatest(max(created_at), max(sold_at))）。
+        tests:
+          - not_null
+      - name: is_sold
+        description: "販売済みフラグ"
+        tests:
+          - not_null
 
   - name: fct_purchase_funnels
-    description: "購買ファネルの各ステップへの到達状況と離脱を記録するテーブル"
+    description: |
+      購買ファネルの各ステップへの到達状況と離脱を記録するテーブル（粒度: session_id × step_no）。
+      最大 5 ステップ（home → department → product → cart → purchase）。同一ステップを複数回踏んだ場合は最初の到達時刻を採用する（7.7 節参照）。
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
               - session_id
               - step_no
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not (step_no = 5 and dropped_here)"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "step_no = case step_name when 'home' then 1 when 'department' then 2 when 'product' then 3 when 'cart' then 4 when 'purchase' then 5 end"
     columns:
       - name: session_id
-        description: "セッションID"
+        description: "セッションID（fct_sessionsへの外部キー / degenerate dimension）"
         tests:
           - not_null
-
       - name: step_no
         description: "ステップ番号(1..5)"
         tests:
@@ -126,7 +411,6 @@ models:
           - accepted_values:
               arguments:
                 values: [1, 2, 3, 4, 5]
-
       - name: step_name
         description: "ステップ名(home|department|product|cart|purchase)"
         tests:
@@ -134,17 +418,95 @@ models:
           - accepted_values:
               arguments:
                 values: ['home', 'department', 'product', 'cart', 'purchase']
-
+      - name: user_id
+        description: "ユーザーID（dim_usersへの外部キー / 未ログインは -1=unknown）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: reached_at
+        description: "ステップ到達時刻（同一ステップ複数到達時は初回時刻）"
+        tests:
+          - not_null
+      - name: reached_date_key
+        description: "ステップ到達日（dim_dateへの外部キー / YYYYMMDD）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: time_from_session_start_sec
+        description: "セッション開始からの経過秒数（step_no に対して単調増加）"
+        tests:
+          - not_null
       - name: dropped_here
-        description: "このステップで離脱したか"
+        description: "このステップで離脱したか（次のステップ番号に到達していない場合 true。step_no=5 は常に false）"
         tests:
           - not_null
 
   - name: fct_pageviews
-    description: "ページビューのファクトテーブル。int_events_uri_parsedを基に、ページビューに関する指標を集計したモデル。"
+    description: |
+      ページビューのファクトテーブル（粒度: 1 イベント）。int_events_uri_parsed のうち
+      event_type IN ('home', 'department', 'product') のみを抽出し、uri から派生情報を付与する。
     columns:
       - name: event_id
         description: "イベントID"
         tests:
           - unique
+          - not_null
+      - name: session_id
+        description: "セッションID（fct_sessionsへの外部キー / degenerate dimension）"
+        tests:
+          - not_null
+      - name: user_id
+        description: "ユーザーID（dim_usersへの外部キー / 未ログインは -1=unknown）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: created_at
+        description: "発生時刻"
+        tests:
+          - not_null
+      - name: created_date_key
+        description: "発生日（dim_dateへの外部キー / YYYYMMDD）"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: sequence_number
+        description: "セッション内シーケンス番号"
+        tests:
+          - not_null
+      - name: event_type
+        description: "イベント種別"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'department', 'product']
+      - name: uri
+        description: "閲覧URI"
+      - name: viewed_product_id
+        description: "閲覧商品ID（event_type='product' のみ。文字列）"
+      - name: viewed_department_gender
+        description: "閲覧部門の性別（event_type='department' のみ）"
+      - name: viewed_category
+        description: "閲覧カテゴリ（event_type='department' のみ）"
+      - name: viewed_brand
+        description: "閲覧ブランド（event_type='department' のみ）"
+      - name: is_landing
+        description: "セッション最初のページか（sequence_number = 1）"
+        tests:
+          - not_null
+      - name: is_exit
+        description: "セッション最後のページか（sequence_number = max(sequence_number)）"
+        tests:
           - not_null
