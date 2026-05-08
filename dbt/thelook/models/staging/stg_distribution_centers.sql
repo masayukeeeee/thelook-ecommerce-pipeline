@@ -4,8 +4,8 @@ with source as (
 
 cleaned as (
   select
-    cast(id as int) as distribution_center_id,
-    cast(name as string) as distribution_center_name,
+    cast(id as int) as product_distribution_center_id,
+    cast(name as string) as product_distribution_center_name,
     cast(latitude as float) as latitude,
     cast(longitude as float) as longitude
   from source
