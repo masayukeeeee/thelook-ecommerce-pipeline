@@ -16,8 +16,8 @@ output as (
     cast(strftime(date_day, '%m') as int) as month,
     cast(strftime(date_day, '%d') as int) as day,
 
-    cast(strftime(date_day, '%V') as int) as iso_week_of_year,
-    cast(strftime(date_day, '%G') as int) as iso_year,
+    cast(strftime(date_day, '%G-W%V') as varchar) as iso_year_week,
+    cast(strftime(date_day, '%Y-%m') as varchar) as year_month,
 
     dayname(date_day) as day_of_week_en,
     case
